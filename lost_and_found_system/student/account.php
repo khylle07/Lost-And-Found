@@ -11,11 +11,17 @@ $user_id = $_SESSION['user_id'];
 
 // Handle form submission
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $first_name = $conn->real_escape_string($_POST['first_name']);
-    $last_name = $conn->real_escape_string($_POST['last_name']);
-    $course = $conn->real_escape_string($_POST['course']);
-    $contact_number = $conn->real_escape_string($_POST['contact_number']);
-    $address = $conn->real_escape_string($_POST['address']);
+    $first_name = $conn->real_escape_string(trim($_POST['first_name']));
+    $last_name = $conn->real_escape_string(trim($_POST['last_name']));
+    $course = $conn->real_escape_string(trim($_POST['course']));
+    $contact_number = $conn->real_escape_string(trim($_POST['contact_number']));
+    $address = $conn->real_escape_string(trim($_POST['address']));
+    
+    // Validate contact number format
+    if (!preg_match('/^09\d{9}$/', $contact_number)) {
+        echo json_encode(['status' => 'error', 'message' => 'Please enter a valid 11-digit Philippine mobile number starting with 09.']);
+        exit();
+    }
     
     $stmt = $conn->prepare("UPDATE users SET first_name = ?, last_name = ?, course = ?, contact_number = ?, address = ?, updated_at = NOW() WHERE user_id = ?");
     $stmt->bind_param("sssssi", $first_name, $last_name, $course, $contact_number, $address, $user_id);

@@ -1,40 +1,81 @@
 <?php
 require_once '../config/session_check.php';
+if (!isStudent()) {
+    header('Location: ../index.php');
+    exit();
+}
+
 require_once '../config/dbconn.php';
 
-// Get filter parameters
-$search = isset($_GET['search']) ? $conn->real_escape_string($_GET['search']) : '';
-$category = isset($_GET['category']) ? intval($_GET['category']) : '';
+// Get filter parameters with validation
+$search = isset($_GET['search']) ? $conn->real_escape_string(trim($_GET['search'])) : '';
+$category = isset($_GET['category']) ? intval($_GET['category']) : 0;
 $type = isset($_GET['type']) ? $conn->real_escape_string($_GET['type']) : '';
 $status = 'approved'; // Only show approved items
 
-// Build query
+// Build query with prepared statements for security
 $query = "SELECT i.*, c.category_name, u.first_name, u.last_name 
           FROM items i 
           JOIN categories c ON i.category_id = c.category_id 
           JOIN users u ON i.user_id = u.user_id 
-          WHERE i.status = '$status'";
+          WHERE i.status = ?";
+
+$params = [$status];
+$types = "s";
 
 if (!empty($search)) {
-    $query .= " AND (i.title LIKE '%$search%' OR i.description LIKE '%$search%' OR i.location LIKE '%$search%')";
+    $query .= " AND (i.title LIKE ? OR i.description LIKE ? OR i.location LIKE ?)";
+    $search_term = "%$search%";
+    $params[] = $search_term;
+    $params[] = $search_term;
+    $params[] = $search_term;
+    $types .= "sss";
 }
-if (!empty($category)) {
-    $query .= " AND i.category_id = $category";
+
+if (!empty($category) && $category > 0) {
+    $query .= " AND i.category_id = ?";
+    $params[] = $category;
+    $types .= "i";
 }
-if (!empty($type)) {
-    $query .= " AND i.item_type = '$type'";
+
+if (!empty($type) && in_array($type, ['lost', 'found'])) {
+    $query .= " AND i.item_type = ?";
+    $params[] = $type;
+    $types .= "s";
 }
 
 $query .= " ORDER BY i.created_at DESC";
-$items = $conn->query($query);
+
+// Prepare and execute query
+$stmt = $conn->prepare($query);
+if ($params) {
+    $stmt->bind_param($types, ...$params);
+}
+$stmt->execute();
+$items = $stmt->get_result();
+$stmt->close();
 
 // Get categories for filter
 $categories = $conn->query("SELECT * FROM categories ORDER BY category_name");
 
 // Get total counts for badges
-$total_items = $conn->query("SELECT COUNT(*) as count FROM items WHERE status = 'approved'")->fetch_assoc()['count'];
-$lost_count = $conn->query("SELECT COUNT(*) as count FROM items WHERE status = 'approved' AND item_type = 'lost'")->fetch_assoc()['count'];
-$found_count = $conn->query("SELECT COUNT(*) as count FROM items WHERE status = 'approved' AND item_type = 'found'")->fetch_assoc()['count'];
+$total_stmt = $conn->prepare("SELECT COUNT(*) as count FROM items WHERE status = 'approved'");
+$total_stmt->execute();
+$total_result = $total_stmt->get_result();
+$total_items = $total_result->fetch_assoc()['count'];
+$total_stmt->close();
+
+$lost_stmt = $conn->prepare("SELECT COUNT(*) as count FROM items WHERE status = 'approved' AND item_type = 'lost'");
+$lost_stmt->execute();
+$lost_result = $lost_stmt->get_result();
+$lost_count = $lost_result->fetch_assoc()['count'];
+$lost_stmt->close();
+
+$found_stmt = $conn->prepare("SELECT COUNT(*) as count FROM items WHERE status = 'approved' AND item_type = 'found'");
+$found_stmt->execute();
+$found_result = $found_stmt->get_result();
+$found_count = $found_result->fetch_assoc()['count'];
+$found_stmt->close();
 ?>
 
 <!DOCTYPE html>

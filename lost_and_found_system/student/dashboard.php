@@ -1,15 +1,6 @@
 <?php
-session_start();
-
-
-// SIMPLIFIED SESSION CHECK
-if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
-    header('Location: ../index.php');
-    exit();
-}
-
-// Check if user is student
-if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'student') {
+require_once '../config/session_check.php';
+if (!isStudent()) {
     header('Location: ../index.php');
     exit();
 }
@@ -17,36 +8,54 @@ if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'student') {
 require_once '../config/dbconn.php';
 $user_id = $_SESSION['user_id'];
 
-// Get user stats with error handling
+// Get user stats
 $lost_items = 0;
 $found_items = 0;
 $pending_claims = 0;
 
 try {
-    $lost_result = $conn->query("SELECT COUNT(*) as count FROM items WHERE user_id = $user_id AND item_type = 'lost'");
-    if ($lost_result) $lost_items = $lost_result->fetch_assoc()['count'];
+    // Lost items count
+    $lost_stmt = $conn->prepare("SELECT COUNT(*) as count FROM items WHERE user_id = ? AND item_type = 'lost'");
+    $lost_stmt->bind_param("i", $user_id);
+    $lost_stmt->execute();
+    $lost_result = $lost_stmt->get_result();
+    $lost_items = $lost_result->fetch_assoc()['count'];
+    $lost_stmt->close();
     
-    $found_result = $conn->query("SELECT COUNT(*) as count FROM items WHERE user_id = $user_id AND item_type = 'found'");
-    if ($found_result) $found_items = $found_result->fetch_assoc()['count'];
+    // Found items count
+    $found_stmt = $conn->prepare("SELECT COUNT(*) as count FROM items WHERE user_id = ? AND item_type = 'found'");
+    $found_stmt->bind_param("i", $user_id);
+    $found_stmt->execute();
+    $found_result = $found_stmt->get_result();
+    $found_items = $found_result->fetch_assoc()['count'];
+    $found_stmt->close();
     
-    $claims_result = $conn->query("SELECT COUNT(*) as count FROM claims WHERE claimant_id = $user_id AND status = 'pending'");
-    if ($claims_result) $pending_claims = $claims_result->fetch_assoc()['count'];
+    // Pending claims count
+    $claims_stmt = $conn->prepare("SELECT COUNT(*) as count FROM claims WHERE claimant_id = ? AND status = 'pending'");
+    $claims_stmt->bind_param("i", $user_id);
+    $claims_stmt->execute();
+    $claims_result = $claims_stmt->get_result();
+    $pending_claims = $claims_result->fetch_assoc()['count'];
+    $claims_stmt->close();
 
     // Get recent items
-    $recent_items = $conn->query("
+    $recent_stmt = $conn->prepare("
         SELECT i.*, c.category_name 
         FROM items i 
         LEFT JOIN categories c ON i.category_id = c.category_id 
-        WHERE i.user_id = $user_id 
+        WHERE i.user_id = ? 
         ORDER BY i.created_at DESC 
         LIMIT 5
     ");
+    $recent_stmt->bind_param("i", $user_id);
+    $recent_stmt->execute();
+    $recent_items = $recent_stmt->get_result();
+    $recent_stmt->close();
+    
 } catch (Exception $e) {
-    // Handle database errors gracefully
     error_log("Student dashboard error: " . $e->getMessage());
     $recent_items = false;
 }
-session_destroy();
 ?>
 
 <!DOCTYPE html>

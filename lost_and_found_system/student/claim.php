@@ -27,8 +27,27 @@ if ($item_id > 0) {
 
 // Handle claim submission
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $item_id = $conn->real_escape_string($_POST['item_id']);
-    $proof = $conn->real_escape_string($_POST['proof_of_ownership']);
+    $item_id = intval($_POST['item_id']);
+    $proof = $conn->real_escape_string(trim($_POST['proof_of_ownership']));
+    
+    // Validate proof of ownership
+    if (empty($proof) || strlen($proof) < 10) {
+        echo json_encode(['status' => 'error', 'message' => 'Please provide detailed proof of ownership (at least 10 characters).']);
+        exit();
+    }
+    
+    // Check if item exists and is available for claim
+    $check_item = $conn->prepare("SELECT item_id FROM items WHERE item_id = ? AND status = 'approved' AND item_type = 'found'");
+    $check_item->bind_param("i", $item_id);
+    $check_item->execute();
+    $check_item->store_result();
+    
+    if ($check_item->num_rows == 0) {
+        echo json_encode(['status' => 'error', 'message' => 'Item not found or not available for claim.']);
+        $check_item->close();
+        exit();
+    }
+    $check_item->close();
     
     // Check if user already claimed this item
     $check_stmt = $conn->prepare("SELECT claim_id FROM claims WHERE item_id = ? AND claimant_id = ?");
@@ -38,29 +57,35 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     
     if ($check_stmt->num_rows > 0) {
         echo json_encode(['status' => 'error', 'message' => 'You have already submitted a claim for this item.']);
-    } else {
-        $stmt = $conn->prepare("INSERT INTO claims (item_id, claimant_id, proof_of_ownership) VALUES (?, ?, ?)");
-        $stmt->bind_param("iis", $item_id, $user_id, $proof);
-        
-        if ($stmt->execute()) {
-            echo json_encode(['status' => 'success', 'message' => 'Claim submitted successfully! The admin will review your claim.']);
-        } else {
-            echo json_encode(['status' => 'error', 'message' => 'Error submitting claim: ' . $stmt->error]);
-        }
-        $stmt->close();
+        $check_stmt->close();
+        exit();
     }
     $check_stmt->close();
+    
+    $stmt = $conn->prepare("INSERT INTO claims (item_id, claimant_id, proof_of_ownership) VALUES (?, ?, ?)");
+    $stmt->bind_param("iis", $item_id, $user_id, $proof);
+    
+    if ($stmt->execute()) {
+        echo json_encode(['status' => 'success', 'message' => 'Claim submitted successfully! The admin will review your claim.']);
+    } else {
+        echo json_encode(['status' => 'error', 'message' => 'Error submitting claim: ' . $stmt->error]);
+    }
+    $stmt->close();
     exit();
 }
 
-// Get user's pending claims
-$pending_claims = $conn->query("
+// Get user's pending claims with proper prepared statement
+$claim_stmt = $conn->prepare("
     SELECT c.*, i.title, i.item_type 
     FROM claims c 
     JOIN items i ON c.item_id = i.item_id 
-    WHERE c.claimant_id = $user_id 
+    WHERE c.claimant_id = ? 
     ORDER BY c.claimed_at DESC
 ");
+$claim_stmt->bind_param("i", $user_id);
+$claim_stmt->execute();
+$pending_claims = $claim_stmt->get_result();
+$claim_stmt->close();
 ?>
 
 <!DOCTYPE html>

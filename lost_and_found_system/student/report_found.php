@@ -11,14 +11,26 @@ $user_id = $_SESSION['user_id'];
 
 // Handle form submission
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $title = $conn->real_escape_string($_POST['title']);
-    $description = $conn->real_escape_string($_POST['description']);
-    $category_id = $conn->real_escape_string($_POST['category_id']);
-    $location = $conn->real_escape_string($_POST['location']);
+    $title = $conn->real_escape_string(trim($_POST['title']));
+    $description = $conn->real_escape_string(trim($_POST['description']));
+    $category_id = intval($_POST['category_id']);
+    $location = $conn->real_escape_string(trim($_POST['location']));
     $date_found = $conn->real_escape_string($_POST['date_found']);
-    $color = $conn->real_escape_string($_POST['color']);
-    $brand = $conn->real_escape_string($_POST['brand']);
-    $contact_info = $conn->real_escape_string($_POST['contact_info']);
+    $color = $conn->real_escape_string(trim($_POST['color']));
+    $brand = $conn->real_escape_string(trim($_POST['brand']));
+    $contact_info = $conn->real_escape_string(trim($_POST['contact_info']));
+    
+    // Basic validation
+    if (empty($title) || empty($description) || empty($location) || empty($date_found) || $category_id <= 0) {
+        echo json_encode(['status' => 'error', 'message' => 'Please fill in all required fields.']);
+        exit();
+    }
+    
+    // Validate date is not in the future
+    if (strtotime($date_found) > time()) {
+        echo json_encode(['status' => 'error', 'message' => 'Date found cannot be in the future.']);
+        exit();
+    }
     
     $stmt = $conn->prepare("INSERT INTO items (user_id, category_id, title, description, item_type, location, date_lost_found, color, brand, contact_info) VALUES (?, ?, ?, ?, 'found', ?, ?, ?, ?, ?)");
     $stmt->bind_param("iisssssss", $user_id, $category_id, $title, $description, $location, $date_found, $color, $brand, $contact_info);

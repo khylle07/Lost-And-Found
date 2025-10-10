@@ -57,7 +57,6 @@ try {
     $recent_items = false;
     $recent_claims = false;
 }
-session_destroy();
 ?>
 
 <!DOCTYPE html>
@@ -282,7 +281,7 @@ session_destroy();
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
         <div class="nav flex-column">
-            <a href="dashboard.php" class="nav-link active">
+            <a href="admin_dashboard.php" class="nav-link active">
                 <i class="bi bi-speedometer2"></i>
                 <span>Dashboard</span>
             </a>
@@ -290,7 +289,7 @@ session_destroy();
                 <i class="bi bi-box"></i>
                 <span>Manage Items</span>
             </a>
-            <a href="../student/claims.php" class="nav-link">
+            <a href="claims.php" class="nav-link">
                 <i class="bi bi-clipboard-check"></i>
                 <span>Manage Claims</span>
             </a>
